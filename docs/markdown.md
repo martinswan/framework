@@ -15,12 +15,21 @@ toc: false
 
 The front matter supports the following options:
 
-- **title** — the page title; defaults to the (first) first-level heading of the page, if any
-- **toc** — if false, disables the [table of contents](./config#toc)
-- **index** — whether to index this page if [search](./search) is enabled; defaults to true for listed pages
-- **keywords** <a href="https://github.com/observablehq/framework/releases/tag/v1.1.0" target="_blank" class="observablehq-version-badge" data-version="^1.1.0" title="Added in v1.1.0"></a> - additional words to index for [search](./search); boosted at the same weight as the title
-- **draft** <a href="https://github.com/observablehq/framework/releases/tag/v1.1.0" target="_blank" class="observablehq-version-badge" data-version="^1.1.0" title="Added in v1.1.0"></a> — whether to skip this page during build; drafts are also not listed in the default sidebar
-- **sql** <a href="https://github.com/observablehq/framework/releases/tag/v1.2.0" target="_blank" class="observablehq-version-badge" data-version="^1.2.0" title="Added in v1.2.0"></a> — table definitions for [SQL code blocks](./sql)
+- **title** - the page title; defaults to the (first) first-level heading of the page, if any
+- **index** - whether to index this page if [search](./search) is enabled; defaults to true for listed pages
+- **keywords** <a href="https://github.com/observablehq/framework/releases/tag/v1.1.0" class="observablehq-version-badge" data-version="^1.1.0" title="Added in v1.1.0"></a> - additional words to index for [search](./search); boosted at the same weight as the title
+- **draft** <a href="https://github.com/observablehq/framework/releases/tag/v1.1.0" class="observablehq-version-badge" data-version="^1.1.0" title="Added in v1.1.0"></a> - whether to skip this page during build; drafts are also not listed in the default sidebar
+- **sql** <a href="https://github.com/observablehq/framework/releases/tag/v1.2.0" class="observablehq-version-badge" data-version="^1.2.0" title="Added in v1.2.0"></a> - table definitions for [SQL code blocks](./sql)
+
+The front matter can also override the following [project configuration](./config) options:
+
+- **toc** - the [table of contents](./config#toc)
+- **style** - the [custom stylesheet](./config#style)
+- **theme** - the [theme](./config#theme)
+- **head** - the [head](./config#head)
+- **header** - the [header](./config#header)
+- **footer** - the [footer](./config#footer)
+- **sidebar** - whether to show the [sidebar](./config#sidebar)
 
 ## Headings
 
@@ -87,7 +96,7 @@ Cell 1-2   |   Cell 2-2   |    Cell 3-2
 [external link](<https://en.wikipedia.org/wiki/Tar_(computing)>)
 ```
 
-For privacy and convenience, links to external resources are given a default `rel` attribute of [`noreferrer`](https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/rel/noreferrer) and [`noopener`](https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/rel/noopener), and a default `target` attribute of [`_blank`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a#target). Hence by default an external link will open in a new window and not pass the (potentially sensitive) referrer to the (potentially untrusted) external site. You can override this behavior by specifying the `rel` or `target` attribute explicitly. For example `<a href="https://example.com" target="_self">` will open in the same window, and `<a href="https://acme.com" rel="">` will allow the referrer.
+For privacy and convenience, external links are given a default `rel` attribute of [`noreferrer`](https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/rel/noreferrer) [`noopener`](https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/rel/noopener) and a default `target` attribute of [`_blank`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a#target). <a href="https://github.com/observablehq/framework/releases/tag/v1.5.0" class="observablehq-version-badge" data-version="^1.5.0" title="Added in 1.5.0"></a> Hence by default an external link will open in a new window and not pass the (potentially sensitive) referrer to the (potentially untrusted) external site. You can override this behavior by specifying the `rel` or `target` attribute explicitly. For example `<a href="https://example.com" target="_self">` will open in the same window, and `<a href="https://acme.com" rel="">` will allow the referrer.
 
 ## Images
 

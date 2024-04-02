@@ -1,6 +1,7 @@
 import assert from "node:assert";
 import {readFile} from "node:fs/promises";
-import {type CreateEffects, create} from "../src/create.js";
+import type {CreateEffects} from "../src/create.js";
+import {create} from "../src/create.js";
 import {fromOsPath} from "../src/files.js";
 import {TestClackEffects} from "./mocks/clack.js";
 
@@ -14,7 +15,7 @@ describe("create", () => {
       null, // Install dependencies?
       false // Initialize git repository?
     );
-    await create(undefined, effects);
+    await create(effects);
     assert.deepStrictEqual(
       new Set(effects.outputs.keys()),
       new Set([
@@ -42,7 +43,7 @@ describe("create", () => {
       null, // Install dependencies?
       false // Initialize git repository?
     );
-    await create(undefined, effects);
+    await create(effects);
     assert.deepStrictEqual(
       new Set(effects.outputs.keys()),
       new Set([
