@@ -9,45 +9,28 @@ try {
 }
 
 export default {
+  root: "docs",
   output: "docs/.observablehq/dist",
   title: "Observable Framework",
   pages: [
+    {name: "What is Framework?", path: "/what-is-framework"},
     {name: "Getting started", path: "/getting-started"},
-    {name: "Routing", path: "/routing"},
+    {name: "Project structure", path: "/project-structure"},
     {name: "Markdown", path: "/markdown"},
     {name: "JavaScript", path: "/javascript"},
+    {name: "Reactivity", path: "/reactivity"},
+    {name: "Imports", path: "/imports"},
     {name: "Data loaders", path: "/loaders"},
+    {name: "Files", path: "/files"},
     {name: "SQL", path: "/sql"},
     {name: "Themes", path: "/themes"},
     {name: "Configuration", path: "/config"},
     {name: "Deploying", path: "/deploying"},
-    {
-      name: "JavaScript",
-      open: false,
-      pages: [
-        {name: "Reactivity", path: "/javascript/reactivity"},
-        {name: "Display", path: "/javascript/display"},
-        {name: "Inputs", path: "/javascript/inputs"},
-        {name: "Imports", path: "/javascript/imports"},
-        {name: "Files", path: "/javascript/files"},
-        {name: "Promises", path: "/javascript/promises"},
-        {name: "Generators", path: "/javascript/generators"},
-        {name: "Mutables", path: "/javascript/mutables"}
-      ]
-    },
-    {
-      name: "CSS",
-      open: false,
-      pages: [
-        {name: "Card", path: "/css/card"},
-        {name: "Color", path: "/css/color"},
-        {name: "Grid", path: "/css/grid"},
-        {name: "Note", path: "/css/note"}
-      ]
-    },
+    {name: "Examples", path: "https://github.com/observablehq/framework/tree/main/examples"},
     {
       name: "Inputs",
       open: false,
+      pager: "inputs",
       pages: [
         {name: "Button", path: "/inputs/button"},
         {name: "Checkbox", path: "/inputs/checkbox"},
@@ -68,11 +51,13 @@ export default {
     {
       name: "Libraries",
       open: false,
+      pager: false,
       pages: [
         {name: "Apache Arrow", path: "/lib/arrow"},
         {name: "Arquero", path: "/lib/arquero"},
         {name: "CSV", path: "/lib/csv"},
         {name: "D3", path: "/lib/d3"},
+        {name: "Deck.gl", path: "/lib/deckgl"},
         {name: "DOT (Graphviz)", path: "/lib/dot"},
         {name: "DuckDB", path: "/lib/duckdb"},
         {name: "Hypertext Literal", path: "/lib/htl"},
@@ -93,14 +78,14 @@ export default {
         {name: "ZIP", path: "/lib/zip"}
       ]
     },
-    {name: "Contributing", path: "/contributing"}
+    {name: "Contributing", path: "/contributing", pager: false}
   ],
   base: "/framework",
-  head: `<link rel="apple-touch-icon" href="/favicon.png">
-<link rel="icon" type="image/png" href="/favicon.png" sizes="512x512">${
+  head: `<link rel="apple-touch-icon" href="/observable.png">
+<link rel="icon" type="image/png" href="/observable.png" sizes="32x32">${
     process.env.CI
       ? `
-<script type="module" async src="https://events.observablehq.com/client.js"></script>
+<script type="module" async src="https://events.observablehq.com/client.js?pageLoad"></script>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-9B88TP6PKQ"></script>
 <script>window.dataLayer=window.dataLayer||[];\nfunction gtag(){dataLayer.push(arguments);}\ngtag('js',new Date());\ngtag('config','G-9B88TP6PKQ');</script>`
       : ""

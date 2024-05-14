@@ -1,6 +1,5 @@
-.venv
 .DS_Store
-dist/
-docs/.observablehq/cache/
+.venv
+/dist/
 node_modules/
 yarn-error.log

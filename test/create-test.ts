@@ -4,6 +4,7 @@ import type {CreateEffects} from "../src/create.js";
 import {create} from "../src/create.js";
 import {fromOsPath} from "../src/files.js";
 import {TestClackEffects} from "./mocks/clack.js";
+import {MockLogger} from "./mocks/logger.js";
 
 describe("create", () => {
   it("instantiates the default template", async () => {
@@ -20,14 +21,16 @@ describe("create", () => {
       new Set(effects.outputs.keys()),
       new Set([
         "template-test/.gitignore",
-        "template-test/docs/aapl.csv",
-        "template-test/docs/components/timeline.js",
-        "template-test/docs/data/events.json",
-        "template-test/docs/data/launches.csv.js",
-        "template-test/docs/example-dashboard.md",
-        "template-test/docs/example-report.md",
-        "template-test/docs/index.md",
-        "template-test/docs/penguins.csv",
+        "template-test/src/.gitignore",
+        "template-test/src/aapl.csv",
+        "template-test/src/observable.png",
+        "template-test/src/components/timeline.js",
+        "template-test/src/data/events.json",
+        "template-test/src/data/launches.csv.js",
+        "template-test/src/example-dashboard.md",
+        "template-test/src/example-report.md",
+        "template-test/src/index.md",
+        "template-test/src/penguins.csv",
         "template-test/observablehq.config.js",
         "template-test/package.json",
         "template-test/README.md"
@@ -48,9 +51,9 @@ describe("create", () => {
       new Set(effects.outputs.keys()),
       new Set([
         "template-test/.gitignore",
-        "template-test/docs/aapl.csv",
-        "template-test/docs/index.md",
-        "template-test/docs/penguins.csv",
+        "template-test/src/.gitignore",
+        "template-test/src/observable.png",
+        "template-test/src/index.md",
         "template-test/observablehq.config.js",
         "template-test/package.json",
         "template-test/README.md"
@@ -60,10 +63,12 @@ describe("create", () => {
 });
 
 class TestCreateEffects implements CreateEffects {
+  isTty = true;
+  outputColumns = 80;
+  logger = new MockLogger();
   outputs = new Map<string, string>();
   clack = new TestClackEffects();
   async sleep(): Promise<void> {}
-  log(): void {}
   async mkdir(): Promise<void> {} // TODO test?
   async copyFile(sourcePath: string, outputPath: string): Promise<void> {
     this.outputs.set(fromOsPath(outputPath), await readFile(sourcePath, "utf-8"));

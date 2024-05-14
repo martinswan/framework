@@ -1,5 +1,5 @@
 import mime from "mime";
-import type {Config, Page, Script} from "./config.js";
+import type {Config, Page, Section} from "./config.js";
 import {mergeToc} from "./config.js";
 import {getClientPath} from "./files.js";
 import type {Html, HtmlResolvers} from "./html.js";
@@ -8,7 +8,7 @@ import {transpileJavaScript} from "./javascript/transpile.js";
 import type {MarkdownPage} from "./markdown.js";
 import type {PageLink} from "./pager.js";
 import {findLink, normalizePath} from "./pager.js";
-import {isAssetPath, relativePath, resolvePath, resolveRelativePath} from "./path.js";
+import {isAssetPath, resolvePath, resolveRelativePath} from "./path.js";
 import type {Resolvers} from "./resolvers.js";
 import {getResolvers} from "./resolvers.js";
 import {rollupClient} from "./rollup.js";
@@ -39,7 +39,7 @@ ${
         .filter((title): title is string => !!title)
         .join(" | ")}</title>\n`
     : ""
-}${renderHead(page.head, resolvers, options)}${
+}${renderHead(page.head, resolvers)}${
     path === "/404"
       ? html.unsafe(`\n<script type="module">
 
@@ -75,7 +75,7 @@ import ${preview || page.code.length ? `{${preview ? "open, " : ""}define} from 
 ${preview ? `\nopen({hash: ${JSON.stringify(resolvers.hash)}, eval: (body) => eval(body)});\n` : ""}${page.code
     .map(({node, id}) => `\n${transpileJavaScript(node, {id, path, resolveImport})}`)
     .join("")}`)}
-</script>${sidebar ? html`\n${await renderSidebar(options)}` : ""}${
+</script>${sidebar ? html`\n${await renderSidebar(options, resolvers.resolveLink)}` : ""}${
     toc.show ? html`\n${renderToc(findHeaders(page), toc.label)}` : ""
   }
 <div id="observablehq-center">${renderHeader(page.header, resolvers)}
@@ -123,9 +123,8 @@ function registerFile(
   })});`;
 }
 
-async function renderSidebar(options: RenderOptions): Promise<Html> {
-  const {title = "Home", pages, root, path, search, md} = options;
-  const {normalizeLink} = md;
+async function renderSidebar(options: RenderOptions, resolveLink: (href: string) => string): Promise<Html> {
+  const {title = "Home", pages, root, path, search} = options;
   return html`<input id="observablehq-sidebar-toggle" type="checkbox" title="Toggle sidebar">
 <label id="observablehq-sidebar-backdrop" for="observablehq-sidebar-toggle"></label>
 <nav id="observablehq-sidebar">
@@ -133,7 +132,7 @@ async function renderSidebar(options: RenderOptions): Promise<Html> {
     <label id="observablehq-sidebar-close" for="observablehq-sidebar-toggle"></label>
     <li class="observablehq-link${
       normalizePath(path) === "/index" ? " observablehq-link-active" : ""
-    }"><a href="${md.normalizeLink(relativePath(path, "/"))}">${title}</a></li>
+    }"><a href="${encodeURI(resolveLink("/"))}">${title}</a></li>
   </ol>${
     search
       ? html`\n  <div id="observablehq-search"><input type="search" placeholder="Search"></div>
@@ -146,23 +145,15 @@ async function renderSidebar(options: RenderOptions): Promise<Html> {
   <ol>${pages.map((p, i) =>
     "pages" in p
       ? html`${i > 0 && "path" in pages[i - 1] ? html`</ol>` : ""}
-    <details${
-      p.pages.some((p) => normalizePath(p.path) === path)
-        ? html` open class="observablehq-section-active"`
-        : p.open
-        ? " open"
-        : ""
+    <${p.collapsible ? (p.open || isSectionActive(p, path) ? "details open" : "details") : "section"}${
+      isSectionActive(p, path) ? html` class="observablehq-section-active"` : ""
     }>
       <summary>${p.name}</summary>
-      <ol>${p.pages.map((p) => renderListItem(p, path, normalizeLink))}
+      <ol>${p.pages.map((p) => renderListItem(p, path, resolveLink))}
       </ol>
-    </details>`
+    </${p.collapsible ? "details" : "section"}>`
       : "path" in p
-      ? html`${i > 0 && "pages" in pages[i - 1] ? html`\n  </ol>\n  <ol>` : ""}${renderListItem(
-          p,
-          path,
-          normalizeLink
-        )}`
+      ? html`${i > 0 && "pages" in pages[i - 1] ? html`\n  </ol>\n  <ol>` : ""}${renderListItem(p, path, resolveLink)}`
       : ""
   )}
   </ol>
@@ -172,17 +163,21 @@ async function renderSidebar(options: RenderOptions): Promise<Html> {
   )}}</script>`;
 }
 
+function isSectionActive(s: Section<Page>, path: string): boolean {
+  return s.pages.some((p) => normalizePath(p.path) === path);
+}
+
 interface Header {
   label: string;
   href: string;
 }
 
-const tocSelector = "h1:not(:first-of-type), h2:first-child, :not(h1) + h2";
+const tocSelector = "h1:not(:first-of-type)[id], h2:first-child[id], :not(h1) + h2[id]";
 
 function findHeaders(page: MarkdownPage): Header[] {
   return Array.from(parseHtml(page.body).document.querySelectorAll(tocSelector))
-    .map((node) => ({label: node.textContent, href: node.firstElementChild?.getAttribute("href")}))
-    .filter((d): d is Header => !!d.label && !!d.href);
+    .map((node) => ({label: node.textContent, href: `#${node.id}`}))
+    .filter((d): d is Header => !!d.label);
 }
 
 function renderToc(headers: Header[], label: string): Html {
@@ -201,32 +196,25 @@ function renderToc(headers: Header[], label: string): Html {
 </aside>`;
 }
 
-function renderListItem(page: Page, path: string, normalizeLink: (href: string) => string): Html {
+function renderListItem(page: Page, path: string, resolveLink: (href: string) => string): Html {
   return html`\n    <li class="observablehq-link${
     normalizePath(page.path) === path ? " observablehq-link-active" : ""
-  }"><a href="${normalizeLink(relativePath(path, page.path))}">${page.name}</a></li>`;
+  }"><a href="${encodeURI(resolveLink(page.path))}"${isAssetPath(page.path) ? null : html` target="_blank"`}>${
+    page.name
+  }</a></li>`;
 }
 
-function renderHead(head: MarkdownPage["head"], resolvers: Resolvers, {scripts, root}: RenderOptions): Html {
+function renderHead(head: MarkdownPage["head"], resolvers: Resolvers): Html {
   const {stylesheets, staticImports, resolveImport, resolveStylesheet} = resolvers;
-  const resolveScript = (src: string) => (/^\w+:/.test(src) ? src : resolveImport(relativePath(root, src)));
   return html`<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>${
-    Array.from(new Set(Array.from(stylesheets, (i) => resolveStylesheet(i))), renderStylesheetPreload) // <link rel=preload as=style>
+    Array.from(new Set(Array.from(stylesheets, resolveStylesheet)), renderStylesheetPreload) // <link rel=preload as=style>
   }${
-    Array.from(new Set(Array.from(stylesheets, (i) => resolveStylesheet(i))), renderStylesheet) // <link rel=stylesheet>
+    Array.from(new Set(Array.from(stylesheets, resolveStylesheet)), renderStylesheet) // <link rel=stylesheet>
   }${
-    Array.from(new Set(Array.from(staticImports, (i) => resolveImport(i))), renderModulePreload) // <link rel=modulepreload>
+    Array.from(new Set(Array.from(staticImports, resolveImport)), renderModulePreload) // <link rel=modulepreload>
   }${
     head ? html`\n${html.unsafe(rewriteHtml(head, resolvers))}` : null // arbitrary user content
-  }${
-    Array.from(scripts, (s) => renderScript(s, resolveScript)) // <script src>
   }`;
-}
-
-function renderScript(script: Script, resolve: (specifier: string) => string): Html {
-  return html`\n<script${script.type ? html` type="${script.type}"` : null}${
-    script.async ? html` async` : null
-  } src="${resolve(script.src)}"></script>`;
 }
 
 function renderStylesheet(href: string): Html {
@@ -248,22 +236,22 @@ function renderHeader(header: MarkdownPage["header"], resolvers: HtmlResolvers):
 }
 
 function renderFooter(footer: MarkdownPage["footer"], resolvers: HtmlResolvers, options: RenderOptions): Html | null {
-  const {path, md} = options;
+  const {path} = options;
   const link = options.pager ? findLink(path, options) : null;
   return link || footer
-    ? html`\n<footer id="observablehq-footer">${link ? renderPager(path, link, md.normalizeLink) : ""}${
+    ? html`\n<footer id="observablehq-footer">${link ? renderPager(link, resolvers.resolveLink) : ""}${
         footer ? html`\n<div>${html.unsafe(rewriteHtml(footer, resolvers))}</div>` : ""
       }
 </footer>`
     : null;
 }
 
-function renderPager(path: string, {prev, next}: PageLink, normalizeLink: (href: string) => string): Html {
-  return html`\n<nav>${prev ? renderRel(path, prev, "prev", normalizeLink) : ""}${
-    next ? renderRel(path, next, "next", normalizeLink) : ""
+function renderPager({prev, next}: PageLink, resolveLink: (href: string) => string): Html {
+  return html`\n<nav>${prev ? renderRel(prev, "prev", resolveLink) : ""}${
+    next ? renderRel(next, "next", resolveLink) : ""
   }</nav>`;
 }
 
-function renderRel(path: string, page: Page, rel: "prev" | "next", normalizeLink: (href: string) => string): Html {
-  return html`<a rel="${rel}" href="${normalizeLink(relativePath(path, page.path))}"><span>${page.name}</span></a>`;
+function renderRel(page: Page, rel: "prev" | "next", resolveLink: (href: string) => string): Html {
+  return html`<a rel="${rel}" href="${encodeURI(resolveLink(page.path))}"><span>${page.name}</span></a>`;
 }

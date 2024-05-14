@@ -8,24 +8,23 @@ import {fileURLToPath} from "node:url";
 import {promisify} from "node:util";
 import * as clack from "@clack/prompts";
 import untildify from "untildify";
+import wrapAnsi from "wrap-ansi";
 import type {ClackEffects} from "./clack.js";
-import {cyan, faint, inverse, link, reset} from "./tty.js";
+import type {TtyEffects} from "./tty.js";
+import {cyan, defaultEffects as defaultTtyEffects, faint, inverse, link, reset} from "./tty.js";
 
-export interface CreateEffects {
+export interface CreateEffects extends TtyEffects {
   clack: ClackEffects;
   sleep: (delay?: number) => Promise<void>;
-  log(output: string): void;
   mkdir(outputPath: string, options?: {recursive?: boolean}): Promise<void>;
   copyFile(sourcePath: string, outputPath: string): Promise<void>;
   writeFile(outputPath: string, contents: string): Promise<void>;
 }
 
 const defaultEffects: CreateEffects = {
+  ...defaultTtyEffects,
   clack,
   sleep,
-  log(output: string): void {
-    console.log(output);
-  },
   async mkdir(outputPath: string, options): Promise<void> {
     await mkdir(outputPath, options);
   },
@@ -40,20 +39,26 @@ const defaultEffects: CreateEffects = {
 export async function create(effects: CreateEffects = defaultEffects): Promise<void> {
   const {clack} = effects;
   clack.intro(`${inverse(" observable create ")} ${faint(`v${process.env.npm_package_version}`)}`);
-  const defaultRootPath = "hello-framework";
+  const defaultRootPath = `.${op.sep}hello-framework`;
   const defaultRootPathError = validateRootPath(defaultRootPath);
+  clack.log.success(
+    wrapAnsi(
+      "Welcome to Observable Framework! 👋 This command will help you create a new project. When prompted, you can press Enter to accept the default value.",
+      Math.min(80, effects.outputColumns)
+    ) + `\n\nWant help? ${link("https://observablehq.com/framework/getting-started")}`
+  );
   await clack.group(
     {
       rootPath: () =>
         clack.text({
-          message: "Where to create your project?",
+          message: "Where should we create your project?",
           placeholder: defaultRootPath,
           defaultValue: defaultRootPathError ? undefined : defaultRootPath,
           validate: (input) => validateRootPath(input, defaultRootPathError)
         }),
       projectTitle: ({results: {rootPath}}) =>
         clack.text({
-          message: "What to title your project?",
+          message: "What should we title your project?",
           placeholder: inferTitle(rootPath!),
           defaultValue: inferTitle(rootPath!)
         }),
@@ -82,6 +87,7 @@ export async function create(effects: CreateEffects = defaultEffects): Promise<v
         }),
       installing: async ({results: {rootPath, projectTitle, includeSampleFiles, packageManager, initializeGit}}) => {
         rootPath = untildify(rootPath!);
+        let spinning = true;
         const s = clack.spinner();
         s.start("Copying template files");
         const template = includeSampleFiles ? "default" : "empty";
@@ -97,7 +103,8 @@ export async function create(effects: CreateEffects = defaultEffects): Promise<v
             installCommand,
             rootPath: rootPath!,
             projectTitle: projectTitle as string,
-            projectTitleString: JSON.stringify(projectTitle as string)
+            projectTitleString: JSON.stringify(projectTitle as string),
+            frameworkVersionString: JSON.stringify(`^${process.env.npm_package_version}`)
           },
           effects
         );
@@ -114,12 +121,23 @@ export async function create(effects: CreateEffects = defaultEffects): Promise<v
         }
         if (packageManager) {
           s.message("Initializing Framework cache");
-          await promisify(exec)(`${runCommand} build`, {cwd: rootPath});
+          try {
+            await promisify(exec)(`${runCommand} build`, {cwd: rootPath});
+          } catch {
+            spinning = false;
+            s.stop("Installed! 🎉");
+            clack.log.warn(
+              wrapAnsi(
+                "Failed to initialize Framework cache. This may be a transient error loading data from external servers or downloading imported modules from jsDelivr; or it might be a network configuration issue such as a firewall blocking traffic. You can ignore this error for now and Framework will automatically try to download again on preview or build. If you continue to experience issues, please check your network configuration.",
+                Math.min(80, effects.outputColumns)
+              ) + `\n\nWant help? ${link("https://github.com/observablehq/framework/issues")}\n`
+            );
+          }
         }
-        s.stop("Installed! 🎉");
+        if (spinning) s.stop("Installed! 🎉");
         const instructions = [`cd ${rootPath}`, ...(packageManager ? [] : [installCommand]), `${runCommand} dev`];
         clack.note(instructions.map((line) => reset(cyan(line))).join("\n"), "Next steps…");
-        clack.outro(`Problems? ${link("https://observablehq.com/framework/getting-started")}`);
+        clack.outro(`Problems? ${link("https://github.com/observablehq/framework/discussions")}`);
       }
     },
     {

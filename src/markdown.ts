@@ -1,6 +1,5 @@
 /* eslint-disable import/no-named-as-default-member */
 import {createHash} from "node:crypto";
-import {extname} from "node:path/posix";
 import he from "he";
 import MarkdownIt from "markdown-it";
 import type {RuleCore} from "markdown-it/lib/parser_core.js";
@@ -11,11 +10,11 @@ import type {Config} from "./config.js";
 import {mergeStyle} from "./config.js";
 import type {FrontMatter} from "./frontMatter.js";
 import {readFrontMatter} from "./frontMatter.js";
-import {rewriteHtmlPaths} from "./html.js";
+import {html, rewriteHtmlPaths} from "./html.js";
 import {parseInfo} from "./info.js";
 import type {JavaScriptNode} from "./javascript/parse.js";
 import {parseJavaScript} from "./javascript/parse.js";
-import {isAssetPath, parseRelativeUrl, relativePath} from "./path.js";
+import {isAssetPath, relativePath} from "./path.js";
 import {transpileSql} from "./sql.js";
 import {transpileTag} from "./tag.js";
 import {InvalidThemeError} from "./theme.js";
@@ -107,9 +106,9 @@ function makeFenceRenderer(baseRenderer: RenderRule): RenderRule {
         // TODO const sourceLine = context.startLine + context.currentLine;
         const node = parseJavaScript(source, {path});
         context.code.push({id, node});
-        html += `<div id="cell-${id}" class="observablehq observablehq--block${
-          node.expression ? " observablehq--loading" : ""
-        }"></div>\n`;
+        html += `<div id="cell-${id}" class="observablehq observablehq--block">${
+          node.expression ? '<span class="observablehq-loading"></span>' : ""
+        }</div>\n`;
       }
     } catch (error) {
       if (!(error instanceof SyntaxError)) throw error;
@@ -262,7 +261,7 @@ function makePlaceholderRenderer(): RenderRule {
       // TODO sourceLine: context.startLine + context.currentLine
       const node = parseJavaScript(token.content, {path, inline: true});
       context.code.push({id, node});
-      return `<span id="cell-${id}" class="observablehq--loading"></span>`;
+      return `<span id="cell-${id}"><span class="observablehq-loading"></span></span>`;
     } catch (error) {
       if (!(error instanceof SyntaxError)) throw error;
       return `<span id="cell-${id}">
@@ -281,26 +280,11 @@ function makeSoftbreakRenderer(baseRenderer: RenderRule): RenderRule {
   };
 }
 
-export function makeLinkNormalizer(baseNormalize: (url: string) => string, clean: boolean): (url: string) => string {
-  return (url) => {
-    // Only clean local links (and ignore e.g. "https:" links).
-    if (isAssetPath(url)) {
-      const u = parseRelativeUrl(url);
-      let {pathname} = u;
-      if (pathname && !pathname.endsWith("/") && !extname(pathname)) pathname += ".html";
-      if (pathname === "index.html") pathname = ".";
-      else if (pathname.endsWith("/index.html")) pathname = pathname.slice(0, -"index.html".length);
-      else if (clean) pathname = pathname.replace(/\.html$/, "");
-      url = pathname + u.search + u.hash;
-    }
-    return baseNormalize(url);
-  };
-}
-
 export interface ParseOptions {
   md: MarkdownIt;
   path: string;
   style?: Config["style"];
+  scripts?: Config["scripts"];
   head?: Config["head"];
   header?: Config["header"];
   footer?: Config["footer"];
@@ -308,20 +292,23 @@ export interface ParseOptions {
 
 export function createMarkdownIt({
   markdownIt,
-  cleanUrls = true
+  linkify = true,
+  quotes = "“”‘’",
+  typographer = false
 }: {
   markdownIt?: (md: MarkdownIt) => MarkdownIt;
-  cleanUrls?: boolean;
+  linkify?: boolean;
+  quotes?: string | string[];
+  typographer?: boolean;
 } = {}): MarkdownIt {
-  const md = MarkdownIt({html: true, linkify: true});
-  md.linkify.set({fuzzyLink: false, fuzzyEmail: false});
-  md.use(MarkdownItAnchor, {permalink: MarkdownItAnchor.permalink.headerLink({class: "observablehq-header-anchor"})});
+  const md = MarkdownIt({html: true, linkify, typographer, quotes});
+  if (linkify) md.linkify.set({fuzzyLink: false, fuzzyEmail: false});
+  md.use(MarkdownItAnchor);
   md.inline.ruler.push("placeholder", transformPlaceholderInline);
   md.core.ruler.before("linkify", "placeholder", transformPlaceholderCore);
   md.renderer.rules.placeholder = makePlaceholderRenderer();
   md.renderer.rules.fence = makeFenceRenderer(md.renderer.rules.fence!);
   md.renderer.rules.softbreak = makeSoftbreakRenderer(md.renderer.rules.softbreak!);
-  md.normalizeLink = makeLinkNormalizer(md.normalizeLink, cleanUrls);
   return markdownIt === undefined ? md : markdownIt(md);
 }
 
@@ -333,10 +320,10 @@ export function parseMarkdown(input: string, options: ParseOptions): MarkdownPag
   const tokens = md.parse(content, context);
   const body = md.renderer.render(tokens, md.options, context); // Note: mutates code!
   return {
-    head: getHtml("head", data, options),
-    header: getHtml("header", data, options),
+    head: getHead(data, options),
+    header: getHeader(data, options),
     body,
-    footer: getHtml("footer", data, options),
+    footer: getFooter(data, options),
     data,
     title: data.title !== undefined ? data.title : findTitle(tokens),
     style: getStyle(data, options),
@@ -355,6 +342,28 @@ export function parseMarkdownMetadata(input: string, options: ParseOptions): Pic
         ? data.title
         : findTitle(md.parse(content, {code: [], startLine: 0, currentLine: 0, path}))
   };
+}
+
+function getHead(data: FrontMatter, options: ParseOptions): string | null {
+  const {scripts, path} = options;
+  let head = getHtml("head", data, options);
+  if (scripts?.length) {
+    head ??= "";
+    for (const {type, async, src} of scripts) {
+      head += html`${head ? "\n" : ""}<script${type ? html` type="${type}"` : null}${
+        async ? html` async` : null
+      } src="${isAssetPath(src) ? relativePath(path, src) : src}"></script>`;
+    }
+  }
+  return head;
+}
+
+function getHeader(data: FrontMatter, options: ParseOptions): string | null {
+  return getHtml("header", data, options);
+}
+
+function getFooter(data: FrontMatter, options: ParseOptions): string | null {
+  return getHtml("footer", data, options);
 }
 
 function getHtml(

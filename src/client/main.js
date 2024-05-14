@@ -27,8 +27,10 @@ export function define(cell) {
   cellsById.get(id)?.variables.forEach((v) => v.delete());
   cellsById.set(id, {cell, variables});
   const root = document.querySelector(`#cell-${id}`);
-  const rejected = (error) => (clear(root), console.error(error), root.append(inspectError(error)));
-  const v = main.variable({_node: root, rejected}, {shadow: {}}); // _node for visibility promise
+  const loading = root.querySelector(".observablehq-loading");
+  const pending = () => reset(root, loading);
+  const rejected = (error) => reject(root, error);
+  const v = main.variable({_node: root, pending, rejected}, {shadow: {}}); // _node for visibility promise
   if (inputs.includes("display") || inputs.includes("view")) {
     let displayVersion = -1; // the variable._version of currently-displayed values
     const display = inline ? displayInline : displayBlock;
@@ -59,9 +61,28 @@ export function define(cell) {
   for (const o of outputs) variables.push(main.variable(true).define(o, [`cell ${id}`], (exports) => exports[o]));
 }
 
+// If the variable previously rejected, it will show an error even if it doesn’t
+// normally display; we can’t rely on a subsequent display clearing the error,
+// so we clear the error when the variable is pending. We also restore the
+// original loading indicator in this case, which applies to inline expressions
+// and expression code blocks.
+function reset(root, loading) {
+  if (root.classList.contains("observablehq--error")) {
+    root.classList.remove("observablehq--error");
+    clear(root);
+    if (loading) root.append(loading);
+  }
+}
+
+function reject(root, error) {
+  console.error(error);
+  root.classList.add("observablehq--error"); // see reset
+  clear(root);
+  root.append(inspectError(error));
+}
+
 function clear(root) {
-  root.innerHTML = "";
-  root.classList.remove("observablehq--loading");
+  root.textContent = "";
 }
 
 function displayInline(root, value) {
