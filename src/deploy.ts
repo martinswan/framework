@@ -37,6 +37,7 @@ const BUILD_AGE_WARNING_MS = 1000 * 60 * 5;
 
 export interface DeployOptions {
   config: Config;
+  deployConfigPath: string | undefined;
   message?: string;
   deployPollInterval?: number;
   force: "build" | "deploy" | null;
@@ -45,8 +46,17 @@ export interface DeployOptions {
 }
 
 export interface DeployEffects extends ConfigEffects, TtyEffects, AuthEffects {
-  getDeployConfig: (sourceRoot: string) => Promise<DeployConfig>;
-  setDeployConfig: (sourceRoot: string, config: DeployConfig) => Promise<void>;
+  getDeployConfig: (
+    sourceRoot: string,
+    deployConfigPath: string | undefined,
+    effects: ConfigEffects
+  ) => Promise<DeployConfig>;
+  setDeployConfig: (
+    sourceRoot: string,
+    deployConfigPath: string | undefined,
+    config: DeployConfig,
+    effects: ConfigEffects
+  ) => Promise<void>;
   clack: ClackEffects;
   logger: Logger;
   input: NodeJS.ReadableStream;
@@ -95,6 +105,7 @@ class Deployer {
   private currentUser!: GetCurrentUserResponse;
 
   constructor(deployOptions: DeployOptions, effects = defaultEffects) {
+    if (deployOptions.deployConfigPath === "") throw new CliError("Invalid path for --deploy-config");
     this.deployOptions = deployOptions;
     this.effects = effects;
   }
@@ -130,6 +141,19 @@ class Deployer {
     }
 
     if (!currentUser) {
+      if (!this.effects.isTty) {
+        if (authError === "unauthenticated" || !apiKey) {
+          throw new CliError("No authentication provided");
+        } else {
+          const source =
+            apiKey.source == "file"
+              ? ` from ${apiKey.filePath}`
+              : apiKey.source === "env"
+              ? ` from $${apiKey.envVar}`
+              : "";
+          throw new CliError(`Authentication${source} was rejected by the server: ${authError ?? "unknown error"}`);
+        }
+      }
       const message =
         authError === "unauthenticated" || authError === null
           ? "You must be logged in to Observable to deploy. Do you want to do that now?"
@@ -205,7 +229,11 @@ class Deployer {
 
   // Get the deploy config, updating if necessary.
   private async getUpdatedDeployConfig() {
-    const deployConfig = await this.effects.getDeployConfig(this.deployOptions.config.root);
+    const deployConfig = await this.effects.getDeployConfig(
+      this.deployOptions.config.root,
+      this.deployOptions.deployConfigPath,
+      this.effects
+    );
 
     if (deployConfig.workspaceLogin && !deployConfig.workspaceLogin.match(/^@?[a-z0-9-]+$/)) {
       throw new CliError(
@@ -233,7 +261,12 @@ class Deployer {
         if (project) {
           deployConfig.projectSlug = project.slug;
           deployConfig.workspaceLogin = workspace.login;
-          this.effects.setDeployConfig(this.deployOptions.config.root, deployConfig);
+          await this.effects.setDeployConfig(
+            this.deployOptions.config.root,
+            this.deployOptions.deployConfigPath,
+            deployConfig,
+            this.effects
+          );
           found = true;
           break;
         }
@@ -359,11 +392,16 @@ class Deployer {
       }
     }
 
-    await this.effects.setDeployConfig(this.deployOptions.config.root, {
-      projectId: deployTarget.project.id,
-      projectSlug: deployTarget.project.slug,
-      workspaceLogin: deployTarget.workspace.login
-    });
+    await this.effects.setDeployConfig(
+      this.deployOptions.config.root,
+      this.deployOptions.deployConfigPath,
+      {
+        projectId: deployTarget.project.id,
+        projectSlug: deployTarget.project.slug,
+        workspaceLogin: deployTarget.workspace.login
+      },
+      this.effects
+    );
 
     return {deployTarget, projectUpdates};
   }
@@ -376,12 +414,16 @@ class Deployer {
 
     let message = this.deployOptions.message;
     if (message === undefined) {
-      const input = await this.effects.clack.text({
-        message: "What changed in this deploy?",
-        placeholder: "Enter a deploy message (optional)"
-      });
-      if (this.effects.clack.isCancel(input)) throw new CliError("User canceled deploy", {print: false, exitCode: 0});
-      message = input;
+      if (this.effects.isTty) {
+        const input = await this.effects.clack.text({
+          message: "What changed in this deploy?",
+          placeholder: "Enter a deploy message (optional)"
+        });
+        if (this.effects.clack.isCancel(input)) throw new CliError("User canceled deploy", {print: false, exitCode: 0});
+        message = input;
+      } else {
+        message = "";
+      }
     }
 
     let deployId;

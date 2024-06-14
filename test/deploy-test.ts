@@ -45,13 +45,14 @@ class MockDeployEffects extends MockAuthEffects implements DeployEffects {
   public input = new Readable();
   public output: NodeJS.WritableStream;
   public observableApiKey: string | null = null;
-  public deployConfig: DeployConfig | null = null;
   public projectTitle = "My Project";
   public projectSlug = "my-project";
   public isTty: boolean;
   public outputColumns: number;
   public clack = new TestClackEffects();
 
+  private deployConfigs: Record<string, DeployConfig>;
+  private defaultDeployConfig: DeployConfig | null;
   private ioResponses: {prompt: RegExp; response: string}[] = [];
   private debug: boolean;
   private configEffects: MockConfigEffects;
@@ -75,7 +76,8 @@ class MockDeployEffects extends MockAuthEffects implements DeployEffects {
     this.configEffects = new MockConfigEffects();
 
     this.observableApiKey = apiKey;
-    this.deployConfig = deployConfig;
+    this.deployConfigs = {};
+    this.defaultDeployConfig = deployConfig;
     this.isTty = isTty;
     this.outputColumns = outputColumns;
     this.debug = debug;
@@ -106,12 +108,20 @@ class MockDeployEffects extends MockAuthEffects implements DeployEffects {
     });
   }
 
-  async getDeployConfig(): Promise<DeployConfig> {
-    return this.deployConfig ?? {projectId: null, projectSlug: null, workspaceLogin: null};
+  private getDeployConfigKey(sourceRoot: string, deployConfigPath?: string): string {
+    return `${sourceRoot}::${deployConfigPath ?? "<default>"}`;
   }
 
-  async setDeployConfig(sourceRoot: string, config: DeployConfig) {
-    this.deployConfig = config;
+  async getDeployConfig(sourceRoot: string, deployConfigPath?: string): Promise<DeployConfig> {
+    const key = this.getDeployConfigKey(sourceRoot, deployConfigPath);
+    return (
+      this.deployConfigs[key] ?? this.defaultDeployConfig ?? {projectId: null, projectSlug: null, workspaceLogin: null}
+    );
+  }
+
+  async setDeployConfig(sourceRoot: string, deployConfigPath: string | undefined, config: DeployConfig) {
+    const key = this.getDeployConfigKey(sourceRoot, deployConfigPath);
+    this.deployConfigs[key] = config;
   }
 
   *visitFiles(path: string) {
@@ -174,7 +184,8 @@ const TEST_OPTIONS: DeployOptions = {
   config: TEST_CONFIG,
   message: undefined,
   deployPollInterval: 0,
-  force: "deploy" // default to not re-building and just deploying output as-is
+  force: "deploy", // default to not re-building and just deploying output as-is
+  deployConfigPath: undefined
 };
 const DEPLOY_CONFIG: DeployConfig & {projectId: string; projectSlug: string; workspaceLogin: string} = {
   projectId: "project123",
@@ -561,6 +572,23 @@ describe("deploy", () => {
       assert.ok(error instanceof Error, `error should be an Error (got ${typeof error})`);
       assert.match(error.message, /^out of inputs for select: Your authentication is invalid/);
     }
+  });
+
+  it("non interactive terminals throw an error when unauthenticated", async () => {
+    const effects = new MockDeployEffects({isTty: false, apiKey: null});
+    await assert.rejects(
+      async () => await deploy(TEST_OPTIONS, effects),
+      (error) => (CliError.assert(error, {message: "No authentication provided"}), true)
+    );
+  });
+
+  it("non interactive terminals throw an error when unauthorized", async () => {
+    getCurrentObservableApi().handleGetCurrentUser({status: 403}).start();
+    const effects = new MockDeployEffects({isTty: false, apiKey: invalidApiKey});
+    await assert.rejects(
+      async () => await deploy(TEST_OPTIONS, effects),
+      (error) => (CliError.assert(error, {message: "Authentication was rejected by the server: forbidden"}), true)
+    );
   });
 
   it("throws an error if deploy creation fails", async () => {
