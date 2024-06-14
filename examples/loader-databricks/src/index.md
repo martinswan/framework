@@ -1,6 +1,6 @@
 # Databricks data loader
 
-Here’s a TypeScript data loader that queries Databricks. It runs a simple query that returns 100 rows from the `nyctaxi` sample dataset.
+Here’s a JavaScript data loader that queries Databricks. It runs a simple query that returns 100 rows from the `nyctaxi` sample dataset.
 
 ```js run=false
 import {csvFormat} from "d3-dsv";
@@ -54,7 +54,7 @@ To run this data loader, you’ll need to install `@databricks/sql`, `d3-dsv`, a
 
 </div>
 
-For the data loader to authenticate with Databricks, you will need to set several secret environment variable, each with the `DATABRICKS_` prefix. If you use GitHub, you can use [secrets in GitHub Actions](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions) to set environment variables; other platforms provide similar functionality for continuous deployment. For local development, we use the `dotenv` package, which allows environment variables to be defined in a `.env` file which lives in the project root and looks something like this:
+For the data loader to authenticate with Databricks, you will need to set several secret environment variables, each with the `DATABRICKS_` prefix. If you use GitHub, you can use [secrets in GitHub Actions](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions) to set environment variables; other platforms provide similar functionality for continuous deployment. For local development, we use the `dotenv` package, which allows environment variables to be defined in a `.env` file which lives in the project root and looks something like this:
 
 ```
 DATABRICKS_SERVER_HOSTNAME="XXX.cloud.databricks.com"
